@@ -1,0 +1,178 @@
+{
+    "name": "camel-translation",
+    "displayName": "驼峰翻译助手",
+    "description": "驼峰翻译助手，支持百度，谷歌，有道，必应等",
+    "publisher": "hanhanzhang",
+    "version": "1.0.2",
+    "icon": "images/logo.png",
+    "engines": {
+        "vscode": "^1.91.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "keywords": [
+        "translate",
+        "variable",
+        "camel",
+        "var",
+        "翻译",
+        "变量"
+    ],
+    "activationEvents": [],
+    "main": "./src/extension.js",
+    "contributes": {
+        "keybindings": [
+            {
+                "command": "extension.camelTranslation.camelCase",
+                "key": "ctrl+,",
+                "mac": "ctrl+,"
+            },
+            {
+                "command": "extension.camelTranslation",
+                "key": "ctrl+.",
+                "mac": "ctrl+."
+            }
+        ],
+        "commands": [
+            {
+                "command": "extension.camelTranslation",
+                "title": "选择翻译",
+                "when": "editorTextFocus",
+                "category": "camel-translation"
+            },
+            {
+                "command": "extension.camelTranslation.camelCase",
+                "title": "camelCase 驼峰(小) camelCase",
+                "when": "editorTextFocus",
+                "category": "camel-translation"
+            },
+            {
+                "command": "extension.camelTranslation.paramCase",
+                "title": "pascalCase 驼峰(大) PascalCase",
+                "when": "editorTextFocus",
+                "category": "camel-translation"
+            },
+            {
+                "command": "extension.camelTranslation.pascalCase",
+                "title": "paramCase 中划线(小) param-case",
+                "when": "editorTextFocus",
+                "category": "camel-translation"
+            },
+            {
+                "command": "extension.camelTranslation.snakeCase",
+                "title": "snakeCase 下划线 snake_case",
+                "when": "editorTextFocus",
+                "category": "camel-translation"
+            },
+            {
+                "command": "extension.camelTranslation.constantCase",
+                "title": "constantCase 常量 CONSTANT_CASE",
+                "when": "editorTextFocus",
+                "category": "camel-translation"
+            },
+            {
+                "command": "extension.camelTranslation.capitalCase",
+                "title": "capitalCase 分词(大) Capital Case",
+                "when": "editorTextFocus",
+                "category": "camel-translation"
+            },
+            {
+                "command": "extension.camelTranslation.dotCase",
+                "title": "dotCase 对象属性 dot case",
+                "when": "editorTextFocus",
+                "category": "camel-translation"
+            },
+            {
+                "command": "extension.camelTranslation.headerCase",
+                "title": "headerCase 中划线(大) Header-Case",
+                "when": "editorTextFocus",
+                "category": "camel-translation"
+            },
+            {
+                "command": "extension.camelTranslation.noCase",
+                "title": "noCase 分词(小) no case",
+                "when": "editorTextFocus",
+                "category": "camel-translation"
+            },
+            {
+                "command": "extension.camelTranslation.pathCase",
+                "title": "pathCase 文件路径 path/case",
+                "when": "editorTextFocus",
+                "category": "camel-translation"
+            }
+        ],
+        "configuration": {
+            "type": "object",
+            "title": "camel-translation",
+            "properties": {
+                "camelTranslation.translationEngine": {
+                    "type": "string",
+                    "enum": [
+                        "google",
+                        "bing",
+                        "baidu",
+                        "youdao",
+                        "googleCN"
+                    ],
+                    "enumDescriptions": [
+                        "谷歌",
+                        "必应",
+                        "百度",
+                        "有道",
+                        "谷歌中国"
+                    ],
+                    "default": "google",
+                    "description": "翻译引擎"
+                },
+                "camelTranslation.BaiDuKey": {
+                    "type": "string",
+                    "default": "",
+                    "description": "百度翻译APP ID"
+                },
+                "camelTranslation.BaiDuSecret": {
+                    "type": "string",
+                    "default": "",
+                    "description": "百度翻译密钥"
+                },
+                "camelTranslation.YouDaoKey": {
+                    "type": "string",
+                    "default": "",
+                    "description": "有道翻译应用ID"
+                },
+                "camelTranslation.YouDaoSecret": {
+                    "type": "string",
+                    "default": "",
+                    "description": "有道翻译应用密钥"
+                }
+            }
+        }
+    },
+    "scripts": {
+        "lint": "eslint .",
+        "pretest": "npm run lint",
+        "test": "vscode-test"
+    },
+    "devDependencies": {
+        "@types/vscode": "^1.91.0",
+        "@types/mocha": "^10.0.7",
+        "@types/node": "20.x",
+        "eslint": "^8.57.0",
+        "typescript": "^5.4.5",
+        "@vscode/test-cli": "^0.0.9",
+        "@vscode/test-electron": "^2.4.0"
+    },
+    "dependencies": {
+        "@translate-tools/core": "^0.2.8",
+        "baidu-translate": "^1.3.0",
+        "bing-translate-api": "^2.6.0",
+        "change-case": "^4.1.2",
+        "google-translate-api-cn": "^1.0.2",
+        "youdao-fanyi": "^2.0.0"
+    },
+    "repository": {
+		"type": "git",
+		"url": "https://github.com/han013/camel-translation"
+	},
+	"homepage": "https://github.com/han013/camel-translation/README.md"
+}
