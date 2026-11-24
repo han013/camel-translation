@@ -1,182 +1,262 @@
-const vscode = require('vscode');
-const window = vscode.window
-const commands = vscode.commands
-const workspace = vscode.workspace
+const vscode = require("vscode");
+const { camelCase, pascalCase, snakeCase, paramCase, constantCase, capitalCase, dotCase, headerCase, noCase, pathCase } = require("./case");
+const proxy = require("./proxy");
+const { translateText } = require("./translate");
+const { openSettings } = require("./settingsView");
 
-const { camelCase, paramCase, pascalCase, snakeCase, constantCase, capitalCase, dotCase, headerCase, noCase, pathCase } = require('change-case');
-
-const { GoogleTranslator } = require('@translate-tools/core/translators/GoogleTranslator');
-const google = new GoogleTranslator();
-const { translate } = require('bing-translate-api');
-const googleCN = require('google-translate-api-cn');
-const Youdao = require("youdao-fanyi");
+const window = vscode.window;
+const commands = vscode.commands;
+const workspace = vscode.workspace;
 
 const changeCaseMap = [
-    { name: "camelCase", handle: camelCase, description: "camelCase 驼峰(小)" },
-    { name: "pascalCase", handle: pascalCase, description: "pascalCase 驼峰(大)" },
-    { name: "snakeCase", handle: snakeCase, description: "snakeCase 下划线" },
-    { name: "paramCase", handle: paramCase, description: "paramCase 中划线(小)" },
-    { name: "headerCase", handle: headerCase, description: "headerCase 中划线(大)" },
-    { name: "noCase", handle: noCase, description: "noCase 分词(小)" },
-    { name: "capitalCase", handle: capitalCase, description: "capitalCase 分词(大)" },
-    { name: "dotCase", handle: dotCase, description: "dotCase 对象属性" },
-    { name: "pathCase", handle: pathCase, description: "pathCase 文件路径" },
-    { name: "constantCase", handle: constantCase, description: "constantCase 常量" },
+    { name: "camelCase", handle: camelCase, description: "驼峰 camelCase" },
+    { name: "pascalCase", handle: pascalCase, description: "帕斯卡 PascalCase" },
+    { name: "snakeCase", handle: snakeCase, description: "下划线 snake_case" },
+    { name: "paramCase", handle: paramCase, description: "中划线 param-case" },
+    { name: "constantCase", handle: constantCase, description: "常量 CONSTANT_CASE" },
+    { name: "headerCase", handle: headerCase, description: "中划线(大) Header-Case" },
+    { name: "capitalCase", handle: capitalCase, description: "分词(大) Capital Case" },
+    { name: "noCase", handle: noCase, description: "分词(小) no case" },
+    { name: "dotCase", handle: dotCase, description: "点分 dot.case" },
+    { name: "pathCase", handle: pathCase, description: "路径 path/case" },
 ];
 
-function activate (context) {
-    const translation = commands.registerCommand("extension.camelTranslation", main);
-    context.subscriptions.push(translation);
+let statusBar;
+
+let extensionContext;
+
+function activate(context) {
+    extensionContext = context;
+    proxy.init(context);
+    statusBar = window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    context.subscriptions.push(statusBar);
+    context.subscriptions.push(proxy.onDidChange(refreshStatus));
+    context.subscriptions.push(
+        workspace.onDidChangeConfiguration((event) => {
+            if (event.affectsConfiguration("camelTranslation")) {
+                refreshStatus();
+            }
+        }),
+    );
+    refreshStatus();
+
+    context.subscriptions.push(commands.registerCommand("extension.camelTranslation", main));
+    context.subscriptions.push(commands.registerCommand("extension.camelTranslation.contextMenu", () => typeTranslation("pascalCase")));
+    context.subscriptions.push(commands.registerCommand("extension.camelTranslation.openSettings", () => openSettings(context)));
+    context.subscriptions.push(commands.registerCommand("extension.camelTranslation.syncProxy", () => syncFromCommand(false)));
+    context.subscriptions.push(commands.registerCommand("extension.camelTranslation.autoSelectProxy", () => syncFromCommand(true)));
+    context.subscriptions.push(commands.registerCommand("extension.camelTranslation.switchProxy", switchProxy));
     changeCaseMap.forEach((item) => {
-        context.subscriptions.push(
-            commands.registerCommand(`extension.camelTranslation.${item.name}`, () => typeTranslation(item.name))
-        );
+        context.subscriptions.push(commands.registerCommand(`extension.camelTranslation.${item.name}`, () => typeTranslation(item.name)));
     });
 }
-function deactivate () { }
 
-module.exports = {
-    activate,
-    deactivate
+function deactivate() {}
+
+function refreshStatus() {
+    const status = proxy.getStatus();
+    statusBar.text = status.text;
+    statusBar.tooltip = status.tooltip;
+    statusBar.command = status.command;
+    statusBar.show();
 }
 
-/**
- * 用户选择选择转换形式
- * @param word 需要转换的单词
- * @return  用户选择
- */
-async function vscodeSelect (word) {
+async function askSubscriptionUrl() {
+    const config = workspace.getConfiguration("camelTranslation");
+    const current = String(config.get("proxy.subscriptionUrl", "") || "").trim();
+    if (current) {
+        return current;
+    }
+    const entered = await window.showInputBox({
+        title: "机场订阅地址",
+        prompt: "粘贴订阅链接。链接中的访问凭证会保存在本机设置里。",
+        ignoreFocusOut: true,
+        placeHolder: "https://example.com/subscribe?token=...",
+    });
+    return entered ? entered.trim() : "";
+}
+
+async function syncFromCommand(forceSelect) {
+    const url = await askSubscriptionUrl();
+    if (!url) {
+        return;
+    }
+    const select = forceSelect || workspace.getConfiguration("camelTranslation").get("proxy.selection", "auto") === "auto";
+    await runTask(() =>
+        proxy.syncSubscription({
+            subscriptionUrl: url,
+            mode: "subscription",
+            select,
+        }),
+    );
+}
+
+async function runTask(task) {
+    try {
+        await proxy.enqueue(task);
+        const state = proxy.snapshot();
+        if (state.lastError) {
+            window.showWarningMessage(state.lastError);
+        } else if (state.lastMessage) {
+            window.showInformationMessage(state.lastMessage);
+        }
+    } catch (error) {
+        window.showErrorMessage(error.message || "操作失败");
+    }
+}
+
+async function vscodeSelect(word) {
     const items = changeCaseMap.map((item) => ({
         label: item.handle(word),
         description: item.description,
     }));
-    const opts = { matchOnDescription: true, placeHolder: "choose replace 选择替换" };
-    const selections = await window.showQuickPick(items, opts);
-    if (!selections) {
-        return;
-    }
-    return selections.label;
+    const selection = await window.showQuickPick(items, {
+        matchOnDescription: true,
+        placeHolder: "选择替换形式",
+    });
+    return selection && selection.label;
 }
 
-/**
- * 翻译
- */
-async function getTranslateResult (srcText) {
-    let engine = workspace.getConfiguration("camelTranslation").translationEngine;
-    // 正则快速判断英文
+async function translateSelection(srcText) {
+    if (!srcText || !srcText.trim()) {
+        return null;
+    }
     if (/^[a-zA-Z\d\s\/\-\._]+$/.test(srcText)) {
         return srcText;
     }
+    const config = workspace.getConfiguration("camelTranslation");
+    const engine = config.get("translationEngine", "google");
+    window.setStatusBarMessage("网络翻译中...", 3000);
     try {
-        // window.showQuickPick([{ label: "网络翻译中..." }]);
-        window.setStatusBarMessage('网络翻译中...',3000)
-        console.log('使用%s翻译内容:%s', engine, srcText);
-        const res = await doTranslate(engine, srcText, "en");
-        const result = res?.text || null;
-        return result;
+        const proxyUrl = await proxy.resolveProxyUrl();
+        try {
+            return await translateText({
+                engine,
+                text: srcText,
+                to: "en",
+                proxyUrl,
+                timeout: proxy.readTimeout(),
+                credentials: {
+                    appId: engine === "baidu" ? config.get("BaiDuKey", "") : config.get("YouDaoKey", ""),
+                    secret: engine === "baidu" ? config.get("BaiDuSecret", "") : config.get("YouDaoSecret", ""),
+                },
+            });
+        } catch (error) {
+            const next = error.network ? proxy.peekNext(proxyUrl) : "";
+            if (!next) {
+                throw error;
+            }
+            const text = await translateText({
+                engine,
+                text: srcText,
+                to: "en",
+                proxyUrl: next,
+                timeout: proxy.readTimeout(),
+                credentials: {
+                    appId: engine === "baidu" ? config.get("BaiDuKey", "") : config.get("YouDaoKey", ""),
+                    secret: engine === "baidu" ? config.get("BaiDuSecret", "") : config.get("YouDaoSecret", ""),
+                },
+            });
+            await proxy.commitSelection(next);
+            return text;
+        }
     } catch (error) {
         console.error(error);
-        window.showInformationMessage(`${engine}翻译异常,请检查网络或稍后重试 ${JSON.stringify(error)}`);
+        window.showErrorMessage(error.message || "翻译失败");
         return null;
     }
 }
-async function main () {
-    // 获取编辑器
+
+async function main() {
     const editor = window.activeTextEditor;
     if (!editor) {
         return;
     }
-    // 获取选中文字
     for (const selection of editor.selections) {
         const selected = editor.document.getText(selection);
-        // 获取翻译结果
-        const translated = await getTranslateResult(selected);
+        const translated = await translateSelection(selected);
         if (!translated) {
             return;
         }
-        // 组装选项
         const userSelected = await vscodeSelect(translated);
-        // 用户选中
         if (!userSelected) {
             return;
         }
-        // 替换文案
-        editor.edit((builder) => builder.replace(selection, userSelected));
+        await editor.edit((builder) => builder.replace(selection, userSelected));
     }
 }
-const typeTranslation = async (type) => {
+
+async function typeTranslation(type) {
     const changeCase = changeCaseMap.find((item) => item.name === type);
-    if (!changeCase) {
-        return;
-    }
-    // 获取编辑器
     const editor = window.activeTextEditor;
-    if (!editor) {
+    if (!changeCase || !editor) {
         return;
     }
-    // 获取选中文字
     for (const selection of editor.selections) {
         const selected = editor.document.getText(selection);
-        // 获取翻译结果
-        const translated = await getTranslateResult(selected);
+        const translated = await translateSelection(selected);
         if (!translated) {
             return;
         }
-        // 替换文案
-        editor.edit((builder) => builder.replace(selection, changeCase.handle(translated)));
-    }
-};
-
-
-async function doTranslate (type, src, to) {
-    console.log('使用%s翻译', type);
-    if (type == 'google') {
-        const res = await google.translate(src, 'auto', to);
-        return { text: res };
-    } else if (type == 'bing') {
-        const res = await translate(src, null, to, true);
-        return { text: res.translation };
-    } else if (type == 'googleCN') {
-        const res = await googleCN(src, { to: to });
-        return { text: res.text };
-    } else if (type == 'baidu') {
-        const BaiDuKey = workspace.getConfiguration("camelTranslation").BaiDuKey;
-        const BaiDuSecret = workspace.getConfiguration("camelTranslation").BaiDuSecret;
-        if (!BaiDuKey) {
-            window.showErrorMessage("请先配置百度应用ID");
-            return;
-        }
-        if (!BaiDuSecret) {
-            window.showErrorMessage("请先配置百度应用秘钥");
-            return;
-        }
-        const baiduTranslate = require('baidu-translate')(BaiDuKey, BaiDuSecret);
-        const res = await baiduTranslate(src);
-        if (res.error_msg) {
-            window.showErrorMessage(`请检查配置 ${res.error_msg}`);
-            return;
-        }
-        return { text: res.trans_result[0].dst };
-    } else if (type == 'youdao') {
-        const YouDaoKey = workspace.getConfiguration("camelTranslation").YouDaoKey;
-        const YouDaoSecret = workspace.getConfiguration("camelTranslation").YouDaoSecret;
-        if (!YouDaoKey) {
-            window.showErrorMessage("请先配置有道应用ID");
-            return;
-        }
-        if (!YouDaoSecret) {
-            window.showErrorMessage("请先配置有道应用秘钥");
-            return;
-        }
-        const yd = Youdao({
-            appkey: YouDaoKey,
-            secret: YouDaoSecret,
-        });
-        const res = await yd(src);
-        if (res.errorCode !== '0') {
-            window.showErrorMessage(`错误码： ${res.errorCode}`);
-            return ;
-        }
-        return { text: res.translation[0] };
+        await editor.edit((builder) => builder.replace(selection, changeCase.handle(translated)));
     }
 }
+
+async function switchProxy() {
+    const mode = workspace.getConfiguration("camelTranslation").get("proxy.mode", "off");
+    if (mode !== "subscription") {
+        openSettings(extensionContext);
+        return;
+    }
+    const state = proxy.snapshot();
+    const items = [
+        { label: "$(gear) 打开设置", action: "settings" },
+        { label: "$(sync) 同步订阅", action: "sync" },
+        { label: "$(zap) 自动选择最快节点", action: "auto" },
+        { label: "节点", kind: vscode.QuickPickItemKind.Separator },
+    ];
+    state.nodes.forEach((node) => {
+        items.push({
+            label: node.name,
+            description: node.usable ? (typeof node.latency === "number" ? `${node.latency} ms` : "未测速") : "不能直接使用",
+            detail: `${node.type}  ${node.server}:${node.port}`,
+            id: node.id,
+            usable: node.usable,
+            picked: node.id === state.selectedId,
+        });
+    });
+    const picked = await window.showQuickPick(items, { placeHolder: "选择代理节点" });
+    if (!picked) {
+        return;
+    }
+    if (picked.action === "settings") {
+        openSettings(extensionContext);
+        return;
+    }
+    if (picked.action === "sync") {
+        await runTask(() =>
+            proxy.syncSubscription({
+                select: workspace.getConfiguration("camelTranslation").get("proxy.selection", "auto") === "auto",
+            }),
+        );
+        return;
+    }
+    if (picked.action === "auto") {
+        await runTask(() => proxy.autoSelect());
+        return;
+    }
+    if (!picked.usable) {
+        window.showWarningMessage(`「${picked.label}」不能直接用来发请求。请选择 HTTP 或 SOCKS 节点，或改用手动代理。`);
+        return;
+    }
+    try {
+        await proxy.selectNode(picked.id);
+    } catch (error) {
+        window.showErrorMessage(error.message || "切换失败");
+    }
+}
+
+module.exports = {
+    activate,
+    deactivate,
+};

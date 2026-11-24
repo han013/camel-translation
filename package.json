@@ -1,9 +1,9 @@
 {
     "name": "camel-translation",
     "displayName": "驼峰翻译助手",
-    "description": "驼峰翻译助手，支持百度，谷歌，有道，必应等",
+    "description": "选中文字翻译成英文变量名，支持谷歌、必应、百度、有道，以及手动代理和机场订阅",
     "publisher": "hanhanzhang",
-    "version": "1.0.2",
+    "version": "1.2.0",
     "icon": "images/logo.png",
     "engines": {
         "vscode": "^1.91.0"
@@ -17,9 +17,12 @@
         "camel",
         "var",
         "翻译",
-        "变量"
+        "变量",
+        "代理"
     ],
-    "activationEvents": [],
+    "activationEvents": [
+        "onStartupFinished"
+    ],
     "main": "./src/extension.js",
     "contributes": {
         "keybindings": [
@@ -37,142 +40,297 @@
         "commands": [
             {
                 "command": "extension.camelTranslation",
-                "title": "选择翻译",
+                "title": "翻译",
+                "icon": "$(globe)",
                 "when": "editorTextFocus",
-                "category": "camel-translation"
+                "category": "驼峰翻译助手"
+            },
+            {
+                "command": "extension.camelTranslation.contextMenu",
+                "title": "翻译",
+                "icon": "$(globe)"
             },
             {
                 "command": "extension.camelTranslation.camelCase",
-                "title": "camelCase 驼峰(小) camelCase",
+                "title": "驼峰 camelCase",
                 "when": "editorTextFocus",
-                "category": "camel-translation"
-            },
-            {
-                "command": "extension.camelTranslation.paramCase",
-                "title": "pascalCase 驼峰(大) PascalCase",
-                "when": "editorTextFocus",
-                "category": "camel-translation"
+                "category": "驼峰翻译助手"
             },
             {
                 "command": "extension.camelTranslation.pascalCase",
-                "title": "paramCase 中划线(小) param-case",
+                "title": "帕斯卡 PascalCase",
                 "when": "editorTextFocus",
-                "category": "camel-translation"
+                "category": "驼峰翻译助手"
+            },
+            {
+                "command": "extension.camelTranslation.paramCase",
+                "title": "中划线 param-case",
+                "when": "editorTextFocus",
+                "category": "驼峰翻译助手"
             },
             {
                 "command": "extension.camelTranslation.snakeCase",
-                "title": "snakeCase 下划线 snake_case",
+                "title": "下划线 snake_case",
                 "when": "editorTextFocus",
-                "category": "camel-translation"
+                "category": "驼峰翻译助手"
             },
             {
                 "command": "extension.camelTranslation.constantCase",
-                "title": "constantCase 常量 CONSTANT_CASE",
+                "title": "常量 CONSTANT_CASE",
                 "when": "editorTextFocus",
-                "category": "camel-translation"
+                "category": "驼峰翻译助手"
             },
             {
                 "command": "extension.camelTranslation.capitalCase",
-                "title": "capitalCase 分词(大) Capital Case",
+                "title": "分词(大) Capital Case",
                 "when": "editorTextFocus",
-                "category": "camel-translation"
+                "category": "驼峰翻译助手"
             },
             {
                 "command": "extension.camelTranslation.dotCase",
-                "title": "dotCase 对象属性 dot case",
+                "title": "点分 dot.case",
                 "when": "editorTextFocus",
-                "category": "camel-translation"
+                "category": "驼峰翻译助手"
             },
             {
                 "command": "extension.camelTranslation.headerCase",
-                "title": "headerCase 中划线(大) Header-Case",
+                "title": "中划线(大) Header-Case",
                 "when": "editorTextFocus",
-                "category": "camel-translation"
+                "category": "驼峰翻译助手"
             },
             {
                 "command": "extension.camelTranslation.noCase",
-                "title": "noCase 分词(小) no case",
+                "title": "分词(小) no case",
                 "when": "editorTextFocus",
-                "category": "camel-translation"
+                "category": "驼峰翻译助手"
             },
             {
                 "command": "extension.camelTranslation.pathCase",
-                "title": "pathCase 文件路径 path/case",
+                "title": "路径 path/case",
                 "when": "editorTextFocus",
-                "category": "camel-translation"
+                "category": "驼峰翻译助手"
+            },
+            {
+                "command": "extension.camelTranslation.openSettings",
+                "title": "打开设置",
+                "category": "驼峰翻译助手"
+            },
+            {
+                "command": "extension.camelTranslation.syncProxy",
+                "title": "同步机场代理",
+                "category": "驼峰翻译助手"
+            },
+            {
+                "command": "extension.camelTranslation.switchProxy",
+                "title": "切换代理",
+                "category": "驼峰翻译助手"
+            },
+            {
+                "command": "extension.camelTranslation.autoSelectProxy",
+                "title": "自动选择代理",
+                "category": "驼峰翻译助手"
             }
         ],
-        "configuration": {
-            "type": "object",
-            "title": "camel-translation",
-            "properties": {
-                "camelTranslation.translationEngine": {
-                    "type": "string",
-                    "enum": [
-                        "google",
-                        "bing",
-                        "baidu",
-                        "youdao",
-                        "googleCN"
-                    ],
-                    "enumDescriptions": [
-                        "谷歌",
-                        "必应",
-                        "百度",
-                        "有道",
-                        "谷歌中国"
-                    ],
-                    "default": "google",
-                    "description": "翻译引擎"
+        "submenus": [
+            {
+                "id": "camelTranslation.convert",
+                "label": "命名转换",
+                "icon": "$(symbol-string)"
+            }
+        ],
+        "menus": {
+            "commandPalette": [
+                {
+                    "command": "extension.camelTranslation.contextMenu",
+                    "when": "false"
+                }
+            ],
+            "editor/context": [
+                {
+                    "command": "extension.camelTranslation.contextMenu",
+                    "when": "editorHasSelection",
+                    "group": "navigation@100"
                 },
-                "camelTranslation.BaiDuKey": {
-                    "type": "string",
-                    "default": "",
-                    "description": "百度翻译APP ID"
+                {
+                    "submenu": "camelTranslation.convert",
+                    "when": "editorHasSelection",
+                    "group": "navigation@101"
+                }
+            ],
+            "camelTranslation.convert": [
+                {
+                    "command": "extension.camelTranslation.camelCase",
+                    "group": "1_style@1"
                 },
-                "camelTranslation.BaiDuSecret": {
-                    "type": "string",
-                    "default": "",
-                    "description": "百度翻译密钥"
+                {
+                    "command": "extension.camelTranslation.pascalCase",
+                    "group": "1_style@2"
                 },
-                "camelTranslation.YouDaoKey": {
-                    "type": "string",
-                    "default": "",
-                    "description": "有道翻译应用ID"
+                {
+                    "command": "extension.camelTranslation.snakeCase",
+                    "group": "1_style@3"
                 },
-                "camelTranslation.YouDaoSecret": {
-                    "type": "string",
-                    "default": "",
-                    "description": "有道翻译应用密钥"
+                {
+                    "command": "extension.camelTranslation.paramCase",
+                    "group": "1_style@4"
+                },
+                {
+                    "command": "extension.camelTranslation.constantCase",
+                    "group": "1_style@5"
+                },
+                {
+                    "command": "extension.camelTranslation.headerCase",
+                    "group": "2_style@1"
+                },
+                {
+                    "command": "extension.camelTranslation.capitalCase",
+                    "group": "2_style@2"
+                },
+                {
+                    "command": "extension.camelTranslation.noCase",
+                    "group": "2_style@3"
+                },
+                {
+                    "command": "extension.camelTranslation.dotCase",
+                    "group": "2_style@4"
+                },
+                {
+                    "command": "extension.camelTranslation.pathCase",
+                    "group": "2_style@5"
+                }
+            ]
+        },
+        "configuration": [
+            {
+                "title": "驼峰翻译助手",
+                "properties": {
+                    "camelTranslation.translationEngine": {
+                        "type": "string",
+                        "order": 1,
+                        "enum": [
+                            "google",
+                            "bing",
+                            "baidu",
+                            "youdao",
+                            "googleCN"
+                        ],
+                        "markdownEnumDescriptions": [
+                            "谷歌翻译。国内网络通常需要代理。",
+                            "必应翻译。",
+                            "百度翻译开放平台，需要应用 ID 和密钥。",
+                            "有道智云翻译，需要应用 ID 和密钥。",
+                            "谷歌中国线路。国内网络通常需要代理。"
+                        ],
+                        "default": "google",
+                        "markdownDescription": "翻译选中文字时使用的引擎。也可以[打开可视化设置](command:extension.camelTranslation.openSettings)。"
+                    },
+                    "camelTranslation.BaiDuKey": {
+                        "type": "string",
+                        "order": 2,
+                        "default": "",
+                        "markdownDescription": "百度翻译应用 ID。只在引擎为百度时使用。"
+                    },
+                    "camelTranslation.BaiDuSecret": {
+                        "type": "string",
+                        "order": 3,
+                        "default": "",
+                        "markdownDescription": "百度翻译密钥。保存在本机 VS Code 设置中。"
+                    },
+                    "camelTranslation.YouDaoKey": {
+                        "type": "string",
+                        "order": 4,
+                        "default": "",
+                        "markdownDescription": "有道翻译应用 ID。只在引擎为有道时使用。"
+                    },
+                    "camelTranslation.YouDaoSecret": {
+                        "type": "string",
+                        "order": 5,
+                        "default": "",
+                        "markdownDescription": "有道翻译应用密钥。保存在本机 VS Code 设置中。"
+                    }
+                }
+            },
+            {
+                "title": "驼峰翻译助手 · 代理",
+                "properties": {
+                    "camelTranslation.proxy.mode": {
+                        "type": "string",
+                        "order": 1,
+                        "enum": [
+                            "off",
+                            "manual",
+                            "subscription"
+                        ],
+                        "markdownEnumDescriptions": [
+                            "直接连接，不走代理。",
+                            "使用手动填写的 HTTP 或 SOCKS 地址。",
+                            "从机场订阅同步节点，并在 HTTP / SOCKS 节点中选择。"
+                        ],
+                        "default": "off",
+                        "markdownDescription": "翻译请求如何出网。本地客户端可填 `http://127.0.0.1:7890`。也可以[打开可视化设置](command:extension.camelTranslation.openSettings)。"
+                    },
+                    "camelTranslation.proxy.url": {
+                        "type": "string",
+                        "order": 2,
+                        "default": "",
+                        "markdownDescription": "手动代理地址，支持 `http`、`https`、`socks5`、`socks4`。例如 `http://127.0.0.1:7890`。"
+                    },
+                    "camelTranslation.proxy.subscriptionUrl": {
+                        "type": "string",
+                        "order": 3,
+                        "default": "",
+                        "markdownDescription": "机场订阅链接。扩展会拉取 Clash、Sing-box 或分享链接，并只把 HTTP / SOCKS 节点用于请求。链接中的访问凭证保存在本机设置里。"
+                    },
+                    "camelTranslation.proxy.selection": {
+                        "type": "string",
+                        "order": 4,
+                        "enum": [
+                            "auto",
+                            "manual"
+                        ],
+                        "markdownEnumDescriptions": [
+                            "同步后测速，使用延迟最低且能连通的节点。",
+                            "保持当前节点，直到手动切换。"
+                        ],
+                        "default": "auto",
+                        "markdownDescription": "机场订阅模式下如何决定当前节点。"
+                    },
+                    "camelTranslation.proxy.timeout": {
+                        "type": "number",
+                        "order": 5,
+                        "default": 15000,
+                        "minimum": 3000,
+                        "maximum": 60000,
+                        "markdownDescription": "单次翻译请求的超时时间，单位毫秒。"
+                    }
                 }
             }
-        }
+        ]
     },
     "scripts": {
         "lint": "eslint .",
-        "pretest": "npm run lint",
-        "test": "vscode-test"
+        "prettier:comment": "自动格式化当前目录下的所有文件",
+        "prettier": "prettier --write .",
+        "test:unit": "node --test test/unit/*.test.js",
+        "test": "npm run lint && npm run test:unit"
     },
     "devDependencies": {
+        "@types/node": "^20.19.0",
         "@types/vscode": "^1.91.0",
-        "@types/mocha": "^10.0.7",
-        "@types/node": "20.x",
-        "eslint": "^8.57.0",
-        "typescript": "^5.4.5",
-        "@vscode/test-cli": "^0.0.9",
-        "@vscode/test-electron": "^2.4.0"
+        "eslint": "^10.15.0",
+        "eslint-config-prettier": "^10.1.8",
+        "globals": "^15.15.0",
+        "prettier": "^3.5.3",
+        "typescript": "^5.9.2"
     },
     "dependencies": {
-        "@translate-tools/core": "^0.2.8",
-        "baidu-translate": "^1.3.0",
-        "bing-translate-api": "^2.6.0",
-        "change-case": "^4.1.2",
-        "google-translate-api-cn": "^1.0.2",
-        "youdao-fanyi": "^2.0.0"
+        "https-proxy-agent": "^9.1.0",
+        "socks-proxy-agent": "^10.1.0",
+        "yaml": "^2.9.1"
     },
     "repository": {
-		"type": "git",
-		"url": "https://github.com/han013/camel-translation"
-	},
-	"homepage": "https://github.com/han013/camel-translation/README.md"
+        "type": "git",
+        "url": "https://github.com/han013/camel-translation"
+    },
+    "homepage": "https://github.com/han013/camel-translation/README.md"
 }

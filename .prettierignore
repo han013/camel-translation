@@ -1,0 +1,7 @@
+node_modules
+.vscode
+.vscode-test
+dist
+coverage
+*.vsix
+package-lock.json

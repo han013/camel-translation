@@ -7,4 +7,7 @@ vsc-extension-quickstart.md
 **/jsconfig.json
 **/*.map
 **/.eslintrc.json
+**/eslint.config.mjs
+**/.prettierrc.json
+**/.prettierignore
 **/.vscode-test.*
