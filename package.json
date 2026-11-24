@@ -1,9 +1,10 @@
 {
     "name": "camel-translation",
     "displayName": "驼峰翻译助手",
-    "description": "选中文字翻译成英文变量名，支持谷歌、必应、百度、有道，以及手动代理和机场订阅",
-    "publisher": "hanhanzhang",
-    "version": "1.2.0",
+    "description": "选中文字翻译成英文变量名，支持谷歌、必应、百度、有道，以及手动代理",
+    "publisher": "han013",
+    "license": "MIT",
+    "version": "1.2.2",
     "icon": "images/logo.png",
     "engines": {
         "vscode": "^1.91.0"
@@ -113,21 +114,6 @@
             {
                 "command": "extension.camelTranslation.openSettings",
                 "title": "打开设置",
-                "category": "驼峰翻译助手"
-            },
-            {
-                "command": "extension.camelTranslation.syncProxy",
-                "title": "同步机场代理",
-                "category": "驼峰翻译助手"
-            },
-            {
-                "command": "extension.camelTranslation.switchProxy",
-                "title": "切换代理",
-                "category": "驼峰翻译助手"
-            },
-            {
-                "command": "extension.camelTranslation.autoSelectProxy",
-                "title": "自动选择代理",
                 "category": "驼峰翻译助手"
             }
         ],
@@ -258,13 +244,11 @@
                         "order": 1,
                         "enum": [
                             "off",
-                            "manual",
-                            "subscription"
+                            "manual"
                         ],
                         "markdownEnumDescriptions": [
                             "直接连接，不走代理。",
-                            "使用手动填写的 HTTP 或 SOCKS 地址。",
-                            "从机场订阅同步节点，并在 HTTP / SOCKS 节点中选择。"
+                            "使用手动填写的 HTTP 或 SOCKS 地址。"
                         ],
                         "default": "off",
                         "markdownDescription": "翻译请求如何出网。本地客户端可填 `http://127.0.0.1:7890`。也可以[打开可视化设置](command:extension.camelTranslation.openSettings)。"
@@ -275,29 +259,9 @@
                         "default": "",
                         "markdownDescription": "手动代理地址，支持 `http`、`https`、`socks5`、`socks4`。例如 `http://127.0.0.1:7890`。"
                     },
-                    "camelTranslation.proxy.subscriptionUrl": {
-                        "type": "string",
-                        "order": 3,
-                        "default": "",
-                        "markdownDescription": "机场订阅链接。扩展会拉取 Clash、Sing-box 或分享链接，并只把 HTTP / SOCKS 节点用于请求。链接中的访问凭证保存在本机设置里。"
-                    },
-                    "camelTranslation.proxy.selection": {
-                        "type": "string",
-                        "order": 4,
-                        "enum": [
-                            "auto",
-                            "manual"
-                        ],
-                        "markdownEnumDescriptions": [
-                            "同步后测速，使用延迟最低且能连通的节点。",
-                            "保持当前节点，直到手动切换。"
-                        ],
-                        "default": "auto",
-                        "markdownDescription": "机场订阅模式下如何决定当前节点。"
-                    },
                     "camelTranslation.proxy.timeout": {
                         "type": "number",
-                        "order": 5,
+                        "order": 3,
                         "default": 15000,
                         "minimum": 3000,
                         "maximum": 60000,
@@ -325,8 +289,7 @@
     },
     "dependencies": {
         "https-proxy-agent": "^9.1.0",
-        "socks-proxy-agent": "^10.1.0",
-        "yaml": "^2.9.1"
+        "socks-proxy-agent": "^10.1.0"
     },
     "repository": {
         "type": "git",

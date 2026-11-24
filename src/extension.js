@@ -23,10 +23,7 @@ const changeCaseMap = [
 
 let statusBar;
 
-let extensionContext;
-
 function activate(context) {
-    extensionContext = context;
     proxy.init(context);
     statusBar = window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     context.subscriptions.push(statusBar);
@@ -43,9 +40,6 @@ function activate(context) {
     context.subscriptions.push(commands.registerCommand("extension.camelTranslation", main));
     context.subscriptions.push(commands.registerCommand("extension.camelTranslation.contextMenu", () => typeTranslation("pascalCase")));
     context.subscriptions.push(commands.registerCommand("extension.camelTranslation.openSettings", () => openSettings(context)));
-    context.subscriptions.push(commands.registerCommand("extension.camelTranslation.syncProxy", () => syncFromCommand(false)));
-    context.subscriptions.push(commands.registerCommand("extension.camelTranslation.autoSelectProxy", () => syncFromCommand(true)));
-    context.subscriptions.push(commands.registerCommand("extension.camelTranslation.switchProxy", switchProxy));
     changeCaseMap.forEach((item) => {
         context.subscriptions.push(commands.registerCommand(`extension.camelTranslation.${item.name}`, () => typeTranslation(item.name)));
     });
@@ -59,50 +53,6 @@ function refreshStatus() {
     statusBar.tooltip = status.tooltip;
     statusBar.command = status.command;
     statusBar.show();
-}
-
-async function askSubscriptionUrl() {
-    const config = workspace.getConfiguration("camelTranslation");
-    const current = String(config.get("proxy.subscriptionUrl", "") || "").trim();
-    if (current) {
-        return current;
-    }
-    const entered = await window.showInputBox({
-        title: "机场订阅地址",
-        prompt: "粘贴订阅链接。链接中的访问凭证会保存在本机设置里。",
-        ignoreFocusOut: true,
-        placeHolder: "https://example.com/subscribe?token=...",
-    });
-    return entered ? entered.trim() : "";
-}
-
-async function syncFromCommand(forceSelect) {
-    const url = await askSubscriptionUrl();
-    if (!url) {
-        return;
-    }
-    const select = forceSelect || workspace.getConfiguration("camelTranslation").get("proxy.selection", "auto") === "auto";
-    await runTask(() =>
-        proxy.syncSubscription({
-            subscriptionUrl: url,
-            mode: "subscription",
-            select,
-        }),
-    );
-}
-
-async function runTask(task) {
-    try {
-        await proxy.enqueue(task);
-        const state = proxy.snapshot();
-        if (state.lastError) {
-            window.showWarningMessage(state.lastError);
-        } else if (state.lastMessage) {
-            window.showInformationMessage(state.lastMessage);
-        }
-    } catch (error) {
-        window.showErrorMessage(error.message || "操作失败");
-    }
 }
 
 async function vscodeSelect(word) {
@@ -128,38 +78,18 @@ async function translateSelection(srcText) {
     const engine = config.get("translationEngine", "google");
     window.setStatusBarMessage("网络翻译中...", 3000);
     try {
-        const proxyUrl = await proxy.resolveProxyUrl();
-        try {
-            return await translateText({
-                engine,
-                text: srcText,
-                to: "en",
-                proxyUrl,
-                timeout: proxy.readTimeout(),
-                credentials: {
-                    appId: engine === "baidu" ? config.get("BaiDuKey", "") : config.get("YouDaoKey", ""),
-                    secret: engine === "baidu" ? config.get("BaiDuSecret", "") : config.get("YouDaoSecret", ""),
-                },
-            });
-        } catch (error) {
-            const next = error.network ? proxy.peekNext(proxyUrl) : "";
-            if (!next) {
-                throw error;
-            }
-            const text = await translateText({
-                engine,
-                text: srcText,
-                to: "en",
-                proxyUrl: next,
-                timeout: proxy.readTimeout(),
-                credentials: {
-                    appId: engine === "baidu" ? config.get("BaiDuKey", "") : config.get("YouDaoKey", ""),
-                    secret: engine === "baidu" ? config.get("BaiDuSecret", "") : config.get("YouDaoSecret", ""),
-                },
-            });
-            await proxy.commitSelection(next);
-            return text;
-        }
+        const proxyUrl = proxy.resolveProxyUrl();
+        return await translateText({
+            engine,
+            text: srcText,
+            to: "en",
+            proxyUrl,
+            timeout: proxy.readTimeout(),
+            credentials: {
+                appId: engine === "baidu" ? config.get("BaiDuKey", "") : config.get("YouDaoKey", ""),
+                secret: engine === "baidu" ? config.get("BaiDuSecret", "") : config.get("YouDaoSecret", ""),
+            },
+        });
     } catch (error) {
         console.error(error);
         window.showErrorMessage(error.message || "翻译失败");
@@ -199,60 +129,6 @@ async function typeTranslation(type) {
             return;
         }
         await editor.edit((builder) => builder.replace(selection, changeCase.handle(translated)));
-    }
-}
-
-async function switchProxy() {
-    const mode = workspace.getConfiguration("camelTranslation").get("proxy.mode", "off");
-    if (mode !== "subscription") {
-        openSettings(extensionContext);
-        return;
-    }
-    const state = proxy.snapshot();
-    const items = [
-        { label: "$(gear) 打开设置", action: "settings" },
-        { label: "$(sync) 同步订阅", action: "sync" },
-        { label: "$(zap) 自动选择最快节点", action: "auto" },
-        { label: "节点", kind: vscode.QuickPickItemKind.Separator },
-    ];
-    state.nodes.forEach((node) => {
-        items.push({
-            label: node.name,
-            description: node.usable ? (typeof node.latency === "number" ? `${node.latency} ms` : "未测速") : "不能直接使用",
-            detail: `${node.type}  ${node.server}:${node.port}`,
-            id: node.id,
-            usable: node.usable,
-            picked: node.id === state.selectedId,
-        });
-    });
-    const picked = await window.showQuickPick(items, { placeHolder: "选择代理节点" });
-    if (!picked) {
-        return;
-    }
-    if (picked.action === "settings") {
-        openSettings(extensionContext);
-        return;
-    }
-    if (picked.action === "sync") {
-        await runTask(() =>
-            proxy.syncSubscription({
-                select: workspace.getConfiguration("camelTranslation").get("proxy.selection", "auto") === "auto",
-            }),
-        );
-        return;
-    }
-    if (picked.action === "auto") {
-        await runTask(() => proxy.autoSelect());
-        return;
-    }
-    if (!picked.usable) {
-        window.showWarningMessage(`「${picked.label}」不能直接用来发请求。请选择 HTTP 或 SOCKS 节点，或改用手动代理。`);
-        return;
-    }
-    try {
-        await proxy.selectNode(picked.id);
-    } catch (error) {
-        window.showErrorMessage(error.message || "切换失败");
     }
 }
 

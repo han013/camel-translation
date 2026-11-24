@@ -1,8 +1,8 @@
 const vscode = require("vscode");
-const { assertHttpUrl, normalizeProxyUrl } = require("./net");
+const { normalizeProxyUrl } = require("./net");
 const proxy = require("./proxy");
 
-const ALLOWED_KEYS = new Set(["translationEngine", "BaiDuKey", "BaiDuSecret", "YouDaoKey", "YouDaoSecret", "proxy.mode", "proxy.url", "proxy.subscriptionUrl", "proxy.selection"]);
+const ALLOWED_KEYS = new Set(["translationEngine", "BaiDuKey", "BaiDuSecret", "YouDaoKey", "YouDaoSecret", "proxy.mode", "proxy.url"]);
 
 let currentPanel;
 let subscription;
@@ -87,7 +87,10 @@ input:focus, select:focus, button:focus-visible {
     outline-offset: 1px;
 }
 .panel { margin-top: 14px; }
-.row { display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+.field-row, .row { display: flex; gap: 8px; align-items: center; }
+.field-row input { flex: 1; min-width: 0; }
+.field-row .action { flex: none; }
+.row { margin-top: 12px; flex-wrap: wrap; }
 .primary, .action { padding: 6px 12px; cursor: pointer; }
 .primary {
     background: var(--vscode-button-background);
@@ -148,21 +151,11 @@ button:disabled { opacity: 0.55; cursor: default; }
     </section>
     <section>
         <h2>代理</h2>
-        <p class="hint">请求可以走手动代理，也可以从机场订阅里同步 HTTP / SOCKS 节点。vmess、trojan、ss 等协议会列出来，但不能直接用来发请求。</p>
+        <p class="hint">需要出网时填写本机代理端口。Clash 的混合端口一般是 http://127.0.0.1:7890，独立 SOCKS 是 socks5://127.0.0.1:7891。</p>
         <div id="modes" class="modes"></div>
         <div id="manual" class="panel" hidden>
             <label><em>代理地址</em><input id="proxyUrl" placeholder="http://127.0.0.1:7890 或 socks5://127.0.0.1:7891" autocomplete="off" /></label>
             <p class="hint">已经开了 Clash、V2Ray 或其他客户端时，填它的本地端口即可。</p>
-        </div>
-        <div id="subscription" class="panel" hidden>
-            <label><em>订阅地址</em><input id="subscriptionUrl" placeholder="https://example.com/api/v1/client/subscribe?token=..." autocomplete="off" /></label>
-            <div class="row">
-                <button id="sync" class="primary" type="button">同步节点</button>
-                <button id="auto" class="action" type="button">测速并自动选择</button>
-                <span id="meta" class="meta"></span>
-            </div>
-            <div id="banner"></div>
-            <div id="nodes" class="nodes"></div>
         </div>
     </section>
 </main>
@@ -177,10 +170,9 @@ const engines = [
 ];
 const modes = [
     ['off', '不使用', '直接连接'],
-    ['manual', '手动地址', '本地或远程代理'],
-    ['subscription', '机场订阅', '同步后自动或手动选']
+    ['manual', '手动地址', '本地或远程代理']
 ];
-let state = { settings: {}, nodes: [], busy: false };
+let state = { settings: {} };
 const $ = (id) => document.getElementById(id);
 
 function send(message) { vscode.postMessage(message); }
@@ -211,53 +203,6 @@ function renderChoices(container, items, current, onPick) {
         container.append(button);
     });
 }
-function latencyText(node) {
-    if (!node.usable) return node.type + ' · 不能直接使用';
-    if (typeof node.latency === 'number') return node.latency + ' ms';
-    if (node.error) return node.error;
-    return '未测速';
-}
-function renderNodes() {
-    const box = $('nodes');
-    box.textContent = '';
-    const nodes = (state.nodes || []).slice().sort((a, b) => Number(b.usable) - Number(a.usable) || (a.latency || 999999) - (b.latency || 999999));
-    if (!nodes.length) {
-        const empty = document.createElement('div');
-        empty.className = 'empty hint';
-        empty.textContent = '还没有节点。填写订阅地址后点「同步节点」。';
-        box.append(empty);
-        return;
-    }
-    nodes.forEach((node) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'node';
-        button.disabled = !node.usable || state.busy;
-        button.setAttribute('aria-pressed', node.id === state.selectedId ? 'true' : 'false');
-        const text = document.createElement('span');
-        const title = document.createElement('strong');
-        title.textContent = node.name;
-        const detail = document.createElement('small');
-        detail.textContent = (node.server ? node.server + ':' + node.port + ' · ' : '') + latencyText(node);
-        text.append(title, detail);
-        const badge = document.createElement('span');
-        badge.className = 'badge';
-        badge.textContent = node.type;
-        button.append(text, badge);
-        button.addEventListener('click', () => send({ type: 'select', id: node.id }));
-        box.append(button);
-    });
-}
-function renderBanner() {
-    const banner = $('banner');
-    banner.textContent = '';
-    const message = state.lastError || state.lastMessage;
-    if (!message) return;
-    const box = document.createElement('div');
-    box.className = state.lastError ? 'banner error' : 'banner';
-    box.textContent = message;
-    banner.append(box);
-}
 function render() {
     const settings = state.settings || {};
     renderChoices($('engines'), engines, settings.translationEngine, (value) => send({ type: 'update', key: 'translationEngine', value: value }));
@@ -266,23 +211,12 @@ function render() {
     pressed($('modes'), settings.proxyMode);
     ['BaiDuKey', 'BaiDuSecret', 'YouDaoKey', 'YouDaoSecret'].forEach((id) => fill(id, settings[id]));
     fill('proxyUrl', settings.proxyUrl);
-    fill('subscriptionUrl', settings.subscriptionUrl);
     $('manual').hidden = settings.proxyMode !== 'manual';
-    $('subscription').hidden = settings.proxyMode !== 'subscription';
-    const when = state.syncedAt ? '上次同步 ' + new Date(state.syncedAt).toLocaleString() : '';
-    $('meta').textContent = state.busy ? '正在处理…' : when;
-    $('sync').disabled = state.busy;
-    $('auto').disabled = state.busy;
-    renderBanner();
-    renderNodes();
 }
 document.querySelectorAll('input[data-key]').forEach((input) => {
     input.addEventListener('change', () => send({ type: 'update', key: input.dataset.key, value: input.value }));
 });
 $('proxyUrl').addEventListener('change', () => send({ type: 'update', key: 'proxy.url', value: $('proxyUrl').value.trim() }));
-$('subscriptionUrl').addEventListener('change', () => send({ type: 'update', key: 'proxy.subscriptionUrl', value: $('subscriptionUrl').value.trim() }));
-$('sync').addEventListener('click', () => send({ type: 'sync', subscriptionUrl: $('subscriptionUrl').value.trim() }));
-$('auto').addEventListener('click', () => send({ type: 'auto', subscriptionUrl: $('subscriptionUrl').value.trim() }));
 $('logo').addEventListener('error', () => $('logo').remove());
 window.addEventListener('message', (event) => {
     state = event.data || state;
@@ -309,16 +243,10 @@ async function saveSetting(key, value) {
     if (key === "proxy.url" && next) {
         next = normalizeProxyUrl(next);
     }
-    if (key === "proxy.subscriptionUrl" && next) {
-        next = assertHttpUrl(next, "订阅地址");
-    }
     if (key === "translationEngine" && !["google", "googleCN", "bing", "baidu", "youdao"].includes(next)) {
         return;
     }
-    if (key === "proxy.mode" && !["off", "manual", "subscription"].includes(next)) {
-        return;
-    }
-    if (key === "proxy.selection" && !["auto", "manual"].includes(next)) {
+    if (key === "proxy.mode" && !["off", "manual"].includes(next)) {
         return;
     }
     await proxy.updateSetting(key, next);
@@ -335,20 +263,6 @@ async function onMessage(message) {
         }
         if (message.type === "update") {
             await saveSetting(message.key, message.value);
-            return;
-        }
-        if (message.type === "sync" || message.type === "auto") {
-            await proxy.enqueue(() =>
-                proxy.syncSubscription({
-                    subscriptionUrl: message.subscriptionUrl,
-                    mode: "subscription",
-                    select: message.type === "auto" || proxy.snapshot().settings.selection === "auto",
-                }),
-            );
-            return;
-        }
-        if (message.type === "select") {
-            await proxy.selectNode(message.id);
         }
     } catch (error) {
         vscode.window.showErrorMessage(error.message || "设置保存失败");
